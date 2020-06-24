@@ -137,3 +137,7 @@ ifdef ETC
 # Targets related to testing and releasing CoreMark. Not part of the general release!
 include Makefile.internal
 endif	
+
+# A shim so freedom-metal can be built
+coremark:
+	$(MAKE) PORT_DIR=freedom-metal link
