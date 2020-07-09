@@ -139,9 +139,9 @@ void stop_time(void) {
       cycles_after, cycles_after - cycles_before);
   printf ("Counter %d holds %d (instret) for a delta of %d\n", METAL_HPM_INSTRET,
       insts_after, insts_after - insts_before);
-  printf("Counter %d holds %d for event 0x%x\n", METAL_HPM_COUNTER_3,
+  printf("Counter %d holds %d for event 0x%lx\n", METAL_HPM_COUNTER_3,
       metal_hpm_read_counter(cpu, METAL_HPM_COUNTER_3), COREMARK_PERFMON_EVENT_SEL3);
-  printf("Counter %d holds %d for event 0x%x\n", METAL_HPM_COUNTER_4,
+  printf("Counter %d holds %d for event 0x%lx\n", METAL_HPM_COUNTER_4,
       metal_hpm_read_counter(cpu, METAL_HPM_COUNTER_4), COREMARK_PERFMON_EVENT_SEL4);
 #endif
 }
