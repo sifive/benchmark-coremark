@@ -85,7 +85,11 @@ typedef unsigned short ee_u16;
 typedef signed int ee_s32;
 typedef double ee_f32;
 typedef unsigned char ee_u8;
+#ifdef COREMARK_PEAK_TUNING
 typedef signed int ee_u32;
+#else
+typedef unsigned int ee_u32;
+#endif
 typedef signed long ee_u64;
 #if __riscv_xlen == 32
 typedef ee_u32 ee_ptr_int;
