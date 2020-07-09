@@ -18,6 +18,7 @@ Original Author: Shay Gal-on
 #include <sys/time.h>
 #include "coremark.h"
 #include "core_portme.h"
+#include <metal/hpm.h>
 
 #if VALIDATION_RUN
 	volatile ee_s32 seed1_volatile=0x3415;
@@ -60,6 +61,17 @@ CORETIMETYPE barebones_clock() {
 /** Define Host specific (POSIX), or target specific global time variables. */
 static CORETIMETYPE start_time_val, stop_time_val;
 
+// Default to basic version, where performance data is not automatically
+// dumped from the hardware perfmon counters. A compile flag
+// -DCOREMARK_ENABLE_PERFMON=1 will enable the perfmon support, or uncomment
+// the following line.
+// #define COREMARK_ENABLE_PERFMON 1
+#ifdef COREMARK_ENABLE_PERFMON
+struct metal_cpu *cpu;
+int cycles_before;
+int insts_before;
+#endif
+
 /* Function : start_time
 	This function will be called right before starting the timed portion of the benchmark.
 
@@ -67,7 +79,36 @@ static CORETIMETYPE start_time_val, stop_time_val;
 	or zeroing some system parameters - e.g. setting the cpu clocks cycles to 0.
 */
 void start_time(void) {
+#ifdef COREMARK_ENABLE_PERFMON
+  cpu = metal_cpu_get(metal_cpu_get_current_hartid());
+  // This will both set up some things, and also clear all the counters.
+  if (metal_hpm_init(cpu) != 0) {
+    printf("ERROR: Could not initialize hpm hardware performance monitor system!\n");
+    return;
+  }
+
+  // By default, count JAL (call) instructions on counter 3, and conditional
+  // branches on counter 4, for testing purposes. Allow overrides via the
+  // compilation flags.
+#ifndef COREMARK_PERFMON_EVENT_SEL3
+#define COREMARK_PERFMON_EVENT_SEL3 (METAL_HPM_EVENTID_15 | METAL_HPM_EVENTCLASS_0)
+#endif
+
+#ifndef COREMARK_PERFMON_EVENT_SEL4
+#define COREMARK_PERFMON_EVENT_SEL4 (METAL_HPM_EVENTID_14 | METAL_HPM_EVENTCLASS_0)
+#endif
+
+  metal_hpm_set_event(cpu, METAL_HPM_COUNTER_3, COREMARK_PERFMON_EVENT_SEL3);
+  metal_hpm_set_event(cpu, METAL_HPM_COUNTER_4, COREMARK_PERFMON_EVENT_SEL4);
+#endif
+
 	GETMYTIME(&start_time_val );
+
+#ifdef COREMARK_ENABLE_PERFMON
+  // Do this as the absolute last thing, because these are much faster than GETMYTIME().
+  cycles_before = metal_hpm_read_counter(cpu, METAL_HPM_CYCLE);
+  insts_before = metal_hpm_read_counter(cpu, METAL_HPM_INSTRET);
+#endif
 }
 /* Function : stop_time
 	This function will be called right after ending the timed portion of the benchmark.
@@ -76,7 +117,32 @@ void start_time(void) {
 	or other system parameters - e.g. reading the current value of cpu cycles counter.
 */
 void stop_time(void) {
+#ifdef COREMARK_ENABLE_PERFMON
+  // Grab the values for cycles and instructions from the free-running
+  // counters, so we don't also count the time to do all these actions, since
+  // those can't be frozen. This is very fast, so we do it before GETMYTIME(),
+  // which is slower due to frequency adjustments etc.
+  int cycles_after = metal_hpm_read_counter(cpu, METAL_HPM_CYCLE);
+  int insts_after = metal_hpm_read_counter(cpu, METAL_HPM_INSTRET);
+#endif
+
 	GETMYTIME(&stop_time_val );
+
+#ifdef COREMARK_ENABLE_PERFMON
+  // First, stop all the counters by writing event 0 to them.
+  // Some counts may be a bit inflated, due to them continuing to count during
+  // the above code.
+  for (int i = METAL_HPM_COUNTER_3; i <= METAL_HPM_COUNTER_4; i++) {
+    metal_hpm_clr_event(cpu, i, 0xffffffff);
+  }
+  printf ("Counter %d holds %d (cycles) for a delta of %d\n", METAL_HPM_CYCLE,
+      cycles_after, cycles_after - cycles_before);
+  printf ("Counter %d holds %d (instret) for a delta of %d\n", METAL_HPM_INSTRET,
+      insts_after, insts_after - insts_before);
+  for (int i = METAL_HPM_COUNTER_3; i <= METAL_HPM_COUNTER_4; i++) {
+    printf("Counter %d holds %d\n", i, metal_hpm_read_counter(cpu, i));
+  }
+#endif
 }
 /* Function : get_time
 	Return an abstract "ticks" number that signifies time on the system.
