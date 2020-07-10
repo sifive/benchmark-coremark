@@ -70,6 +70,12 @@ static CORETIMETYPE start_time_val, stop_time_val;
 struct metal_cpu *cpu;
 int cycles_before;
 int insts_before;
+
+// Also set up some pointers for the L2 memory-mapped I/O performance counters.
+volatile uint64_t *const l2pm_cfgbase = (uint64_t*)0x02012000;
+volatile uint64_t *const l2pm_ctrbase = (uint64_t*)0x02013000;
+// The composable L2 cache implements 6 counters.
+#define MAX_L2PM_IDX  6
 #endif
 
 /* Function : start_time
@@ -100,6 +106,35 @@ void start_time(void) {
 
   metal_hpm_set_event(cpu, METAL_HPM_COUNTER_3, COREMARK_PERFMON_EVENT_SEL3);
   metal_hpm_set_event(cpu, METAL_HPM_COUNTER_4, COREMARK_PERFMON_EVENT_SEL4);
+
+  // Configure the L2 events.
+#ifndef COREMARK_L2PM_EVENT_SEL0
+#define COREMARK_L2PM_EVENT_SEL0 (0x7f001)  // All L1 misses/accesses to L2 (incl prefetches)
+#endif
+#ifndef COREMARK_L2PM_EVENT_SEL1
+#define COREMARK_L2PM_EVENT_SEL1 (0x6002)  // All L2 hits
+#endif
+#ifndef COREMARK_L2PM_EVENT_SEL2
+#define COREMARK_L2PM_EVENT_SEL2 (0x1f03)  // All L2 misses
+#endif
+#ifndef COREMARK_L2PM_EVENT_SEL3
+#define COREMARK_L2PM_EVENT_SEL3 (0x20003)  // All L2 dirty evictions/writebacks
+#endif
+#ifndef COREMARK_L2PM_EVENT_SEL4
+#define COREMARK_L2PM_EVENT_SEL4 (0x7e003)  // All L2 clean evictions
+#endif
+#ifndef COREMARK_L2PM_EVENT_SEL5
+#define COREMARK_L2PM_EVENT_SEL5 (0x03001)  // All L1 prefetch misses/accesses to L2
+#endif
+
+  l2pm_cfgbase[0] = COREMARK_L2PM_EVENT_SEL0;
+  l2pm_cfgbase[1] = COREMARK_L2PM_EVENT_SEL1;
+  l2pm_cfgbase[2] = COREMARK_L2PM_EVENT_SEL2;
+  l2pm_cfgbase[3] = COREMARK_L2PM_EVENT_SEL3;
+  l2pm_cfgbase[4] = COREMARK_L2PM_EVENT_SEL4;
+  l2pm_cfgbase[5] = COREMARK_L2PM_EVENT_SEL5;
+  for (int i=0; i<MAX_L2PM_IDX; i++)
+    l2pm_ctrbase[i] = 0;
 #endif
 
 	GETMYTIME(&start_time_val );
@@ -143,6 +178,9 @@ void stop_time(void) {
       metal_hpm_read_counter(cpu, METAL_HPM_COUNTER_3), COREMARK_PERFMON_EVENT_SEL3);
   printf("Counter %d holds %d for event 0x%lx\n", METAL_HPM_COUNTER_4,
       metal_hpm_read_counter(cpu, METAL_HPM_COUNTER_4), COREMARK_PERFMON_EVENT_SEL4);
+  for (int i = 0; i<MAX_L2PM_IDX; i++) {
+    printf("L2 counter %d holds %d for event 0x%lx\n", i, l2pm_ctrbase[i], l2pm_cfgbase[i]);
+  }
 #endif
 }
 /* Function : get_time
