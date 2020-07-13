@@ -170,6 +170,11 @@ void stop_time(void) {
   for (int i = METAL_HPM_COUNTER_3; i <= METAL_HPM_COUNTER_4; i++) {
     metal_hpm_clr_event(cpu, i, 0xffffffff);
   }
+  uint64_t l2cfgs[MAX_L2PM_IDX];
+  for (int i = 0; i < MAX_L2PM_IDX; i++) {
+    l2cfgs[i] = l2pm_cfgbase[i];
+    l2pm_cfgbase[i] = 0;  // Disable any further counting on this counter.
+  }
   printf ("Counter %d holds %d (cycles) for a delta of %d\n", METAL_HPM_CYCLE,
       cycles_after, cycles_after - cycles_before);
   printf ("Counter %d holds %d (instret) for a delta of %d\n", METAL_HPM_INSTRET,
@@ -179,7 +184,7 @@ void stop_time(void) {
   printf("Counter %d holds %d for event 0x%lx\n", METAL_HPM_COUNTER_4,
       metal_hpm_read_counter(cpu, METAL_HPM_COUNTER_4), COREMARK_PERFMON_EVENT_SEL4);
   for (int i = 0; i<MAX_L2PM_IDX; i++) {
-    printf("L2 counter %d holds %d for event 0x%lx\n", i, l2pm_ctrbase[i], l2pm_cfgbase[i]);
+    printf("L2 counter %d holds %d for event 0x%lx\n", i, l2pm_ctrbase[i], l2cfgs[i]);
   }
 #endif
 }
